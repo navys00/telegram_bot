@@ -1,6 +1,7 @@
+require('dotenv').config();
 const { Telegraf } = require('telegraf');
 
-const bot = new Telegraf('');
+const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 bot.start((ctx) => ctx.reply('Привет! Я телеграмм-бот на JavaScript.'));
 bot.help((ctx) => ctx.reply('Отправь мне любое сообщение, и я отвечу тем же!'));

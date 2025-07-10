@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "nodemon telegramClient.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -20,7 +21,10 @@
   "homepage": "https://github.com/navys00/telegram_bot#readme",
   "dependencies": {
     "dotenv": "^17.1.0",
+    "input": "^1.0.1",
+    "nodemon": "^3.1.10",
     "telegraf": "^4.16.3",
-    "telegram": "^2.26.22"
+    "telegram": "^2.26.22",
+    "tesseract.js": "^6.0.1"
   }
 }
