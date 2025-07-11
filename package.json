@@ -21,7 +21,9 @@
   "homepage": "https://github.com/navys00/telegram_bot#readme",
   "dependencies": {
     "dotenv": "^17.1.0",
+    "file-type": "^21.0.0",
     "input": "^1.0.1",
+    "jimp": "^1.6.0",
     "nodemon": "^3.1.10",
     "telegraf": "^4.16.3",
     "telegram": "^2.26.22",
