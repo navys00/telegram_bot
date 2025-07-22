@@ -12,8 +12,8 @@ const apiId = parseInt(process.env.API_ID);
 const apiHash = process.env.API_HASH;
 const stringSession = new StringSession(process.env.SESSION);
 
-// Функция предобработки изображения (только grayscale)
-async function preprocessImage(buffer) {
+// Функция для выделения области 200x200 пикселей из изображения
+async function cropTo200x200(buffer) {
   try {
     if (!buffer || !Buffer.isBuffer(buffer)) {
       throw new Error("Буфер изображения некорректный!");
@@ -26,13 +26,71 @@ async function preprocessImage(buffer) {
 
     const image = await Jimp.read(buffer);
 
+    const { width, height } = image.bitmap;
+    // console.log(image.bitmap.width,image.bitmap.height)
+    // Вычисляем координаты для обрезки центральной области 200x200
+    let cropX = 0;
+    let cropY = 0;
+    let cropWidth = 200;
+    let cropHeight = 200;
+
+    // Если изображение больше 200x200, обрезаем центральную область
+    if (width > 200) {
+      cropX = Math.floor((width - 200) / 2);
+    } else {
+      cropWidth = width;
+    }
+
+    if (height > 200) {
+      cropY = Math.floor((height - 200) / 2);
+    } else {
+      cropHeight = height;
+    }
+
+    // Обрезаем изображение
+    const croppedImage = image.crop(cropX, cropY, cropWidth, cropHeight);
+
+    // Если обрезанное изображение меньше 200x200, увеличиваем его
+    if (cropWidth < 200 || cropHeight < 200) {
+      croppedImage.resize(200, 200,);
+    }
+    const processedBuffer = await croppedImage.getBuffer(JimpMime.jpeg)
+    // return new Promise((resolve, reject) => {
+    //   croppedImage
+    //     .getBuffer('image/jpeg')
+    //     .then(croppedBuffer => resolve(croppedBuffer))
+    //     .catch(err => reject(err));
+    // });
+  } catch (err) {
+    console.error("❌ Ошибка при обрезке изображения:", err);
+    console.error(err.stack)
+    throw err;
+  }
+}
+
+// Функция предобработки изображения (только grayscale)
+async function preprocessImage(buffer) {
+  try {
+    if (!buffer || !Buffer.isBuffer(buffer)) {
+      throw new Error("Буфер изображения некорректный!");
+    }
+
+    const type = await fileType.fileTypeFromBuffer(buffer);
+    if (!type || !type.mime.startsWith('image/')) {
+      throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
+    }
+
+    // Сначала обрезаем изображение до 200x200
+    const croppedBuffer = await cropTo200x200(buffer);
+    const image = await Jimp.read(croppedBuffer);
+
     return new Promise((resolve, reject) => {
       image
         .greyscale() // Оставляем только перевод в градации серого
         .contrast(1)
         .brightness(1.2)
         
-        .getBuffer(JimpMime.jpeg)
+        .getBuffer('image/jpeg')
         .then(processedBuffer => resolve(processedBuffer))
         .catch(err => reject(err));
     });
@@ -81,6 +139,11 @@ async function preprocessImage(buffer) {
             const filename = `${downloadDir}/photo_${Date.now()}.${type.ext}`;
             fs.writeFileSync(filename, buffer);
 
+            console.log("📄 Начинаем обрезку изображения до 200x200...");
+            const croppedBuffer = await cropTo200x200(buffer);
+            const croppedFilename = `${downloadDir}/cropped_${Date.now()}.jpg`;
+            fs.writeFileSync(croppedFilename, croppedBuffer);
+
             console.log("📄 Начинаем предобработку изображения...");
             const processedBuffer = await preprocessImage(buffer);
 
@@ -106,8 +169,8 @@ async function preprocessImage(buffer) {
             console.log("📄 Распознанный текст:\n", cleanedText);
 
             await client.sendMessage("me", {
-              message: `🔔 Новый пост в "${channel.title}"\n\n📄 Распознанный текст:\n${cleanedText || "Не найдено"}`,
-              file: processedFilename
+              message: `🔔 Новый пост в "${channel.title}"\n\n📄 Распознанный текст:\n${cleanedText || "Не найдено"}\n\n✂️ Обработана область 200x200 пикселей`,
+              file: croppedFilename
             });
 
           } catch (err) {
