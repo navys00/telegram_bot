@@ -5,16 +5,18 @@ const { StringSession } = require("telegram/sessions");
 const Tesseract = require('tesseract.js');
 const input = require("input");
 const fs = require("fs");
-const {Jimp, JimpMime }= require("jimp");
+const { Jimp, JimpMime } = require("jimp");
 const fileType = require('file-type');
 
 const apiId = parseInt(process.env.API_ID);
 const apiHash = process.env.API_HASH;
 const stringSession = new StringSession(process.env.SESSION);
 
-// Функция для выделения области 200x200 пикселей из изображения
+// Функция для обрезки изображения до 200x200
 async function cropTo200x200(buffer) {
+  
   try {
+    
     if (!buffer || !Buffer.isBuffer(buffer)) {
       throw new Error("Буфер изображения некорректный!");
     }
@@ -23,52 +25,39 @@ async function cropTo200x200(buffer) {
     if (!type || !type.mime.startsWith('image/')) {
       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
     }
-
+      
     const image = await Jimp.read(buffer);
-
     const { width, height } = image.bitmap;
-    // console.log(image.bitmap.width,image.bitmap.height)
-    // Вычисляем координаты для обрезки центральной области 200x200
-    let cropX = 0;
-    let cropY = 0;
-    let cropWidth = 200;
-    let cropHeight = 200;
 
-    // Если изображение больше 200x200, обрезаем центральную область
+    let cropX = 0, cropY = 0, cropWidth = 600, cropHeight = 600;
+
     if (width > 200) {
       cropX = Math.floor((width - 200) / 2);
     } else {
       cropWidth = width;
     }
-
+      
     if (height > 200) {
       cropY = Math.floor((height - 200) / 2);
     } else {
       cropHeight = height;
     }
-
-    // Обрезаем изображение
-    const croppedImage = image.crop(cropX, cropY, cropWidth, cropHeight);
-
-    // Если обрезанное изображение меньше 200x200, увеличиваем его
+      
+    const croppedImage = image.crop({x:cropX,y: cropY,w: cropWidth,h: cropHeight});
+      
     if (cropWidth < 200 || cropHeight < 200) {
-      croppedImage.resize(200, 200,);
+      croppedImage.resize(200, 200, Jimp.RESIZE_NEAREST_NEIGHBOR);
     }
-    const processedBuffer = await croppedImage.getBuffer(JimpMime.jpeg)
-    // return new Promise((resolve, reject) => {
-    //   croppedImage
-    //     .getBuffer('image/jpeg')
-    //     .then(croppedBuffer => resolve(croppedBuffer))
-    //     .catch(err => reject(err));
-    // });
+
+
+    return await croppedImage.getBuffer(JimpMime.jpeg)
   } catch (err) {
-    console.error("❌ Ошибка при обрезке изображения:", err);
-    console.error(err.stack)
+    console.error("❌ Ошибка обработки изображения:", err);
     throw err;
   }
 }
 
-// Функция предобработки изображения (только grayscale)
+// Предобработка изображения
 async function preprocessImage(buffer) {
   try {
     if (!buffer || !Buffer.isBuffer(buffer)) {
@@ -80,26 +69,18 @@ async function preprocessImage(buffer) {
       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
     }
 
-    // Сначала обрезаем изображение до 200x200
-    const croppedBuffer = await cropTo200x200(buffer);
-    const image = await Jimp.read(croppedBuffer);
-
-    return new Promise((resolve, reject) => {
-      image
-        .greyscale() // Оставляем только перевод в градации серого
-        .contrast(1)
-        .brightness(1.2)
-        
-        .getBuffer('image/jpeg')
-        .then(processedBuffer => resolve(processedBuffer))
-        .catch(err => reject(err));
-    });
+    const image = await Jimp.read(buffer);
+    return await image.greyscale()
+      .contrast(1)
+      .brightness(1.2)
+      .getBuffer(JimpMime.jpeg);
   } catch (err) {
-    console.error("❌ Ошибка при обработке изображения:", err);
+    console.error("❌ Ошибка предобработки:", err);
     throw err;
   }
 }
 
+// Основной клиент
 (async () => {
   const client = new TelegramClient(stringSession, apiId, apiHash, {
     connectionRetries: 5,
@@ -131,53 +112,67 @@ async function preprocessImage(buffer) {
             }
 
             const type = await fileType.fileTypeFromBuffer(buffer);
-            
             if (!type || !type.mime.startsWith('image/')) {
               throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
             }
 
+            // Сохраняем оригинальное изображение
             const filename = `${downloadDir}/photo_${Date.now()}.${type.ext}`;
             fs.writeFileSync(filename, buffer);
 
-            console.log("📄 Начинаем обрезку изображения до 200x200...");
-            const croppedBuffer = await cropTo200x200(buffer);
+            // Обрезаем изображение
+            console.log("✂️ Начинаем обрезку до 200x200...");
+            // const croppedBuffer = await cropTo200x200(buffer);
             const croppedFilename = `${downloadDir}/cropped_${Date.now()}.jpg`;
-            fs.writeFileSync(croppedFilename, croppedBuffer);
+            fs.writeFileSync(croppedFilename, buffer);
 
-            console.log("📄 Начинаем предобработку изображения...");
+            // Предобработка изображения
+            console.log("🖼️ Начинаем предобработку изображения...");
             const processedBuffer = await preprocessImage(buffer);
-
-            const processedFilename = `${downloadDir}/processed_${Date.now()}.png`;
+            const processedFilename = `${downloadDir}/processed_${Date.now()}.jpg`;
             fs.writeFileSync(processedFilename, processedBuffer);
 
-            console.log("📄 Начинаем распознавание текста...");
-            const { data: { text } } = await Tesseract.recognize(
+            // Распознавание текста
+            console.log("📄 Начинаем OCR...");
+            const result = await Tesseract.recognize(
               processedBuffer,
               'eng+rus',
               {
                 config: {
                   psm: 6,
+                  oem: 1,
+                  tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789.,-—()!?'
                 }
               }
             );
 
-            const cleanedText = text
+            const rawText = result?.data?.text || '';
+            const cleanedText = rawText
               .replace(/[^\w\s.,?!—\u0400-\u04FF]/g, '')
               .replace(/\s+/g, ' ')
               .trim();
 
-            console.log("📄 Распознанный текст:\n", cleanedText);
-
-            await client.sendMessage("me", {
-              message: `🔔 Новый пост в "${channel.title}"\n\n📄 Распознанный текст:\n${cleanedText || "Не найдено"}\n\n✂️ Обработана область 200x200 пикселей`,
-              file: croppedFilename
-            });
+            // Отправляем результат
+            if (cleanedText.length > 0) {
+              console.log(cleanedText)
+              // await client.sendMessage("me", {
+              //   message: `🔔 Новый пост в "${channel.title}"\n\n📄 Распознанный текст:\n${cleanedText}\n\n✂️ Обработана область 200x200 пикселей`,
+              //   file: processedFilename
+              // });
+            } else {
+              console.log("⚠️ Текст не найден на изображении");
+              await client.sendMessage("me", {
+                message: `🔔 В "${channel.title}" найдено изображение, но текст не распознан.`,
+                file: processedFilename
+              });
+            }
 
           } catch (err) {
             console.error("❌ Ошибка при обработке изображения:", err);
           }
         }
 
+        // Пересылка медиа и текста
         if (msg.media && !msg.photo) {
           await client.forwardMessages("me", {
             messages: [msg],
@@ -193,7 +188,7 @@ async function preprocessImage(buffer) {
     );
 
   } catch (err) {
-    console.error("Ошибка:", err);
+    console.error("❌ Ошибка работы с каналом:", err);
   }
 
 })();
