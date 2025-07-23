@@ -13,10 +13,88 @@ const apiHash = process.env.API_HASH;
 const stringSession = new StringSession(process.env.SESSION);
 
 // Функция для обрезки изображения до 200x200
-async function cropTo200x200(buffer) {
+// async function cropTo200x200(buffer) {
   
-  try {
+//   try {
     
+//     if (!buffer || !Buffer.isBuffer(buffer)) {
+//       throw new Error("Буфер изображения некорректный!");
+//     }
+
+//     const type = await fileType.fileTypeFromBuffer(buffer);
+//     if (!type || !type.mime.startsWith('image/')) {
+//       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
+//     }
+      
+//     const image = await Jimp.read(buffer);
+//     const { width, height } = image.bitmap;
+
+//     let cropX = 0, cropY = 0, cropWidth = 600, cropHeight = 600;
+
+//     if (width > 200) {
+//       cropX = Math.floor((width - 200) / 2);
+//     } else {
+//       cropWidth = width;
+//     }
+      
+//     if (height > 200) {
+//       cropY = Math.floor((height - 200) / 2);
+//     } else {
+//       cropHeight = height;
+//     }
+      
+//     const croppedImage = image.crop({x:cropX,y: cropY,w: cropWidth,h: cropHeight});
+      
+//     if (cropWidth < 200 || cropHeight < 200) {
+//       croppedImage.resize(200, 200, Jimp.RESIZE_NEAREST_NEIGHBOR);
+//     }
+
+
+//     return await croppedImage.getBuffer(JimpMime.jpeg)
+//   } catch (err) {
+//     console.error("❌ Ошибка обработки изображения:", err);
+//     throw err;
+//   }
+// }
+// async function cropTopHalf(buffer,topMargin = 0) {
+//   try {
+//     if (!buffer || !Buffer.isBuffer(buffer)) {
+//       throw new Error("Буфер изображения некорректный!");
+//     }
+
+//     const type = await fileType.fileTypeFromBuffer(buffer);
+//     if (!type || !type.mime.startsWith('image/')) {
+//       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
+//     }
+
+//     const image = await Jimp.read(buffer);
+//     const { width, height } = image.bitmap;
+
+//     // Вычисляем координаты и размеры для верхней половины
+//     const cropWidth = width; // вся ширина
+//     const cropHeight = Math.floor(height / 3); // половина высоты
+//     const cropX = 0;
+//     const cropY = 0
+    
+
+//     // Обрезаем верхнюю половину
+//     const croppedImage = image.crop({
+//       x: cropX,
+//       y: cropY,
+//       w: cropWidth,
+//       h: cropHeight
+//     });
+//      croppedImage.resize({w: cropWidth, h:cropHeight, mode: Jimp.RESIZE_NEAREST_NEIGHBOR});
+//     // Сохраняем обрезанное изображение в буфер
+//     return await croppedImage.getBuffer(JimpMime.png); // лучше использовать PNG для OCR
+//   } catch (err) {
+//     console.error("❌ Ошибка при обрезке верхней половины:", err);
+//     throw err;
+//   }
+// }
+
+async function cropFromTop(buffer, topMargin = 0,rightMargin = 0) {
+  try {
     if (!buffer || !Buffer.isBuffer(buffer)) {
       throw new Error("Буфер изображения некорректный!");
     }
@@ -25,38 +103,41 @@ async function cropTo200x200(buffer) {
     if (!type || !type.mime.startsWith('image/')) {
       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
     }
-      
+
     const image = await Jimp.read(buffer);
     const { width, height } = image.bitmap;
 
-    let cropX = 0, cropY = 0, cropWidth = 600, cropHeight = 600;
-
-    if (width > 200) {
-      cropX = Math.floor((width - 200) / 2);
-    } else {
-      cropWidth = width;
-    }
-      
-    if (height > 200) {
-      cropY = Math.floor((height - 200) / 2);
-    } else {
-      cropHeight = height;
-    }
-      
-    const croppedImage = image.crop({x:cropX,y: cropY,w: cropWidth,h: cropHeight});
-      
-    if (cropWidth < 200 || cropHeight < 200) {
-      croppedImage.resize(200, 200, Jimp.RESIZE_NEAREST_NEIGHBOR);
+    // Проверка: отступ должен быть числом и не отрицательным
+    if (typeof topMargin !== 'number' || topMargin < 0) {
+      throw new Error("Отступ должен быть неотрицательным числом");
     }
 
+    // Ограничиваем отступ высотой изображения
+    const safeMargin = Math.min(topMargin, height - 1); // чтобы высота обрезанного изображения > 0
+    const safeRightMargin = Math.min(rightMargin, width - 1)
+    const cropWidth = width - safeRightMargin;
+    const cropY = safeMargin;
+    const cropHeight = height -950;
 
-    return await croppedImage.getBuffer(JimpMime.jpeg)
+    if (cropHeight <= 0) {
+      throw new Error("Отступ превышает высоту изображения");
+    }
+
+    // Обрезаем изображение
+    const croppedImage = image.crop({
+      x: 0,
+      y: cropY,
+      w: cropWidth,
+      h: cropHeight
+    });
+
+    // Сохраняем обрезанное изображение в буфер
+    return await croppedImage.getBuffer(JimpMime.png);
   } catch (err) {
-    console.error("❌ Ошибка обработки изображения:", err);
+    console.error("❌ Ошибка при обрезке изображения с отступом:", err);
     throw err;
   }
 }
-
 // Предобработка изображения
 async function preprocessImage(buffer) {
   try {
@@ -70,10 +151,22 @@ async function preprocessImage(buffer) {
     }
 
     const image = await Jimp.read(buffer);
-    return await image.greyscale()
-      .contrast(1)
-      .brightness(1.2)
-      .getBuffer(JimpMime.jpeg);
+    let tmp_mime=''
+    if(image.hasAlpha()){
+      tmp_mime=JimpMime.png
+    } 
+    else{
+      tmp_mime=JimpMime.jpeg
+    }
+    return await image
+    .greyscale()
+      .brightness(1)
+      .color([                          // Коррекция зелёного
+      { apply: 'green', params: [0.3] }
+    ])
+    
+      // .threshold({ max: 120 })
+      .getBuffer(tmp_mime);
   } catch (err) {
     console.error("❌ Ошибка предобработки:", err);
     throw err;
@@ -122,13 +215,13 @@ async function preprocessImage(buffer) {
 
             // Обрезаем изображение
             console.log("✂️ Начинаем обрезку до 200x200...");
-            // const croppedBuffer = await cropTo200x200(buffer);
-            const croppedFilename = `${downloadDir}/cropped_${Date.now()}.jpg`;
-            fs.writeFileSync(croppedFilename, buffer);
+            const croppedBuffer = await cropFromTop(buffer,310,120); //можно оставить 80, чтобы видеть счет
+            // const croppedFilename = `${downloadDir}/cropped_${Date.now()}.jpg`;
+            // fs.writeFileSync(croppedFilename, buffer);
 
             // Предобработка изображения
             console.log("🖼️ Начинаем предобработку изображения...");
-            const processedBuffer = await preprocessImage(buffer);
+            const processedBuffer = await preprocessImage(croppedBuffer);
             const processedFilename = `${downloadDir}/processed_${Date.now()}.jpg`;
             fs.writeFileSync(processedFilename, processedBuffer);
 
@@ -141,7 +234,7 @@ async function preprocessImage(buffer) {
                 config: {
                   psm: 6,
                   oem: 1,
-                  tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789.,-—()!?'
+                  tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789.,-—:;()"\'«»…()!?'
                 }
               }
             );
@@ -155,10 +248,6 @@ async function preprocessImage(buffer) {
             // Отправляем результат
             if (cleanedText.length > 0) {
               console.log(cleanedText)
-              // await client.sendMessage("me", {
-              //   message: `🔔 Новый пост в "${channel.title}"\n\n📄 Распознанный текст:\n${cleanedText}\n\n✂️ Обработана область 200x200 пикселей`,
-              //   file: processedFilename
-              // });
             } else {
               console.log("⚠️ Текст не найден на изображении");
               await client.sendMessage("me", {
