@@ -12,86 +12,7 @@ const apiId = parseInt(process.env.API_ID);
 const apiHash = process.env.API_HASH;
 const stringSession = new StringSession(process.env.SESSION);
 
-// Функция для обрезки изображения до 200x200
-// async function cropTo200x200(buffer) {
-  
-//   try {
-    
-//     if (!buffer || !Buffer.isBuffer(buffer)) {
-//       throw new Error("Буфер изображения некорректный!");
-//     }
 
-//     const type = await fileType.fileTypeFromBuffer(buffer);
-//     if (!type || !type.mime.startsWith('image/')) {
-//       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
-//     }
-      
-//     const image = await Jimp.read(buffer);
-//     const { width, height } = image.bitmap;
-
-//     let cropX = 0, cropY = 0, cropWidth = 600, cropHeight = 600;
-
-//     if (width > 200) {
-//       cropX = Math.floor((width - 200) / 2);
-//     } else {
-//       cropWidth = width;
-//     }
-      
-//     if (height > 200) {
-//       cropY = Math.floor((height - 200) / 2);
-//     } else {
-//       cropHeight = height;
-//     }
-      
-//     const croppedImage = image.crop({x:cropX,y: cropY,w: cropWidth,h: cropHeight});
-      
-//     if (cropWidth < 200 || cropHeight < 200) {
-//       croppedImage.resize(200, 200, Jimp.RESIZE_NEAREST_NEIGHBOR);
-//     }
-
-
-//     return await croppedImage.getBuffer(JimpMime.jpeg)
-//   } catch (err) {
-//     console.error("❌ Ошибка обработки изображения:", err);
-//     throw err;
-//   }
-// }
-// async function cropTopHalf(buffer,topMargin = 0) {
-//   try {
-//     if (!buffer || !Buffer.isBuffer(buffer)) {
-//       throw new Error("Буфер изображения некорректный!");
-//     }
-
-//     const type = await fileType.fileTypeFromBuffer(buffer);
-//     if (!type || !type.mime.startsWith('image/')) {
-//       throw new Error(`❌ Неподдерживаемый MIME тип: ${type?.mime || 'неизвестно'}`);
-//     }
-
-//     const image = await Jimp.read(buffer);
-//     const { width, height } = image.bitmap;
-
-//     // Вычисляем координаты и размеры для верхней половины
-//     const cropWidth = width; // вся ширина
-//     const cropHeight = Math.floor(height / 3); // половина высоты
-//     const cropX = 0;
-//     const cropY = 0
-    
-
-//     // Обрезаем верхнюю половину
-//     const croppedImage = image.crop({
-//       x: cropX,
-//       y: cropY,
-//       w: cropWidth,
-//       h: cropHeight
-//     });
-//      croppedImage.resize({w: cropWidth, h:cropHeight, mode: Jimp.RESIZE_NEAREST_NEIGHBOR});
-//     // Сохраняем обрезанное изображение в буфер
-//     return await croppedImage.getBuffer(JimpMime.png); // лучше использовать PNG для OCR
-//   } catch (err) {
-//     console.error("❌ Ошибка при обрезке верхней половины:", err);
-//     throw err;
-//   }
-// }
 
 async function cropFromTop(buffer, topMargin = 0,rightMargin = 0) {
   try {
@@ -282,21 +203,3 @@ async function preprocessImage(buffer) {
 
 })();
 
-
-
-// const fs = require("fs");
-// const {Jimp} = require("jimp");
-// async function f(){
-
-// const path = "./downloads/photo_1752238914535.jpg";
-// const buffer = fs.readFileSync(path);
-// // const image = await Jimp.fromBuffer(buffer);
-// const image = await Jimp.read("./downloads/photo_1752238914535.jpg");
-
-// // const buffer = await fs.readFile("photo_1752238914536.png");
-// // const image =await Jimp.read("photo_1752238914536.png");
-// // image.greyscale()
-// }
-
-
-// f()
