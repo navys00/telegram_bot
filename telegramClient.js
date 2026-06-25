@@ -50,18 +50,21 @@ async function sendToOCR(buffer, { focus = 'full' } = {}) {
             // Отправляем в Python: сначала обычный OCR
             const ocrFull = await sendToOCR(buffer, { focus: 'full' });
             // При необходимости — распознать только обведённую область
-             const ocrHighlight = await sendToOCR(buffer, { focus: 'highlight' });
-             console.log(ocrFull)
-            console.log("OCR full_text:", ocrFull.ocr.full_text);
-            // console.log("OCR highlighted_text:", ocrHighlight.highlighted_text);
+            const ocrHighlight = await sendToOCR(buffer, { focus: 'highlight' });
+            const bet = ocrHighlight.bet || ocrFull.bet || {};
+            const ocr = ocrHighlight.ocr || ocrFull.ocr || {};
+            console.log("OCR full_text:", ocrFull.ocr?.full_text);
+            console.log("BET:", bet);
 
             // Пример: переслать себе результат
             await client.sendMessage("me", {
               message:
                 `Канал: ${channel.title}\n` +
-                `full_text: ${ocrFull.full_text || '-'}\n` +
-                `highlighted: ${ocrHighlight.highlighted_text || '-'}\n` +
-                `mask_present: ${ocrHighlight.mask_present}`
+                `Лига: ${bet.league || '-'}\n` +
+                `Команды: ${(bet.teams || []).join(' — ') || '-'}\n` +
+                `Прогноз: ${bet.prediction || '-'}\n` +
+                `Коэффициент: ${bet.odds || '-'}\n` +
+                `Выделение найдено: ${ocr.mask_present ? 'да' : 'нет'}`
             });
 
           } catch (err) {
